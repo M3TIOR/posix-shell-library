@@ -1,0 +1,38 @@
+# @describe - Ensures any character in the provided string will be used as
+#             raw characters in a Regular Expression
+# @usage perl_regex STRING('s)...
+# @param STRING('s) - The string or strings you wish to sanitize.
+perl_regex()
+(
+	DONE=''; f=''; b=''; c=''; # TODO='';
+
+	TODO="$*";
+
+	OIFS="$IFS"; # Use IFS to split by filter chars.
+	IFS='"\$[]*+.^?!{}()|'; for f in $TODO; do
+		# Since $f cannot contain unsafe chars, we can test against it.
+		c=;
+		if test "${TODO#${DONE}${f}\\}" != "$TODO"; then c='\\'; fi;
+		if test "${TODO#${DONE}${f}\*}" != "$TODO"; then c='\*'; fi;
+		if test "${TODO#${DONE}${f}\$}" != "$TODO"; then c='\$'; fi;
+		# test "${TODO#${DONE}${f}\)}" = "$TODO" || c='\)';
+		# test "${TODO#${DONE}${f}\(}" = "$TODO" || c='\(';
+		if test "${TODO#${DONE}${f}\[}" != "$TODO"; then c='\['; fi;
+		if test "${TODO#${DONE}${f}\]}" != "$TODO"; then c='\]'; fi;
+		if test "${TODO#${DONE}${f}(}" != "$TODO"; then c='\)'; fi;
+		if test "${TODO#${DONE}${f})}" != "$TODO"; then c='\('; fi;
+		if test "${TODO#${DONE}${f}+}" != "$TODO"; then c='\+'; fi;
+		if test "${TODO#${DONE}${f}.}" != "$TODO"; then c='\.'; fi;
+		if test "${TODO#${DONE}${f}^}" != "$TODO"; then c='\^'; fi;
+		if test "${TODO#${DONE}${f}\?}" != "$TODO"; then c='\?'; fi;
+		if test "${TODO#${DONE}${f}\!}" != "$TODO"; then c='\!'; fi;
+		if test "${TODO#${DONE}${f}\{}" != "$TODO"; then c='\}'; fi;
+		if test "${TODO#${DONE}${f}\}}" != "$TODO"; then c='\{'; fi;
+		if test "${TODO#${DONE}${f}|}" != "$TODO"; then c='\|'; fi;
+
+		DONE="$DONE$f$c";
+	done;
+	IFS="$OIFS";
+
+	printf '%s' "$DONE";
+)

@@ -1,0 +1,53 @@
+# @describe - Prints the simplest primitive type of a value.
+# @usage - typeof [-g] VALUE
+# @param "-g" - Toggles the numerical return values which increase in order of inclusivity.
+# @param VALUE - The value you wish to check.
+# @prints (5|'string') - When no other primitive can be coerced from the input.
+# @prints (4|'filename') - When a string primitive is safe to use as a filename.
+# @prints (3|'alphanum') - When a string primitive only contains letters and numbers.
+# @prints (2|'double') - When the input can be coerced into a floating number.
+# @prints (1|'int') - When the input can be coerced into a regular integer.
+# @prints (0|'uint') - When the input can be coereced into an unsigned integer.
+typeof()
+(
+	SIGNED=false; FLOATING=false; GROUP=false; f=''; b=''; # in='';
+
+	# Check for group return parameter.
+	if test "$1" = "-g"; then GROUP=true; shift; fi;
+
+	in="$*";
+
+	# Check for negation sign.
+	if test "$in" != "${b:=${in#-}}"; then SIGNED=true; fi;
+	in="$b"; b='';
+
+	# Check for floating point.
+	if test "$in" != "${b:=${in#*.}}" -a "$in" != "${f:=${in%.*}}"; then
+		if test "$in" != "$f.$b"; then
+			if $GROUP; then echo "5"; else echo "string"; fi; return;
+		fi;
+		FLOATING=true;
+	fi;
+
+	case "$in" in
+		''|*[!0-9\.]*)
+			if test "$in" != "${in#*[~\`\!@\#\$%\^\*()\+=\{\}\[\]|:;\"\'<>,?\/]}"; then
+				if $GROUP; then echo "5"; else echo "string"; fi;
+			else
+				if test "$in" != "${1#*[_\-.\\ ]}"; then
+					if $GROUP; then echo "4"; else echo "filename"; fi;
+				else
+					if $GROUP; then echo "3"; else echo "alphanum"; fi;
+				fi;
+			fi;;
+		*)
+			if $FLOATING; then
+				if $GROUP; then echo "2"; else echo "double"; fi; return;
+			fi;
+			if $SIGNED; then
+				if $GROUP; then echo "1"; else echo "int"; fi; return;
+			fi;
+			if $GROUP; then echo "0"; else echo "uint"; fi;
+		;;
+	esac;
+)

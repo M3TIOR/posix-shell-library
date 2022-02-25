@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# TODO: implement an import mechanism
+# TODO: implement a function-call mechanism from the path

@@ -1,0 +1,124 @@
+# @brief - Prints the locations LD_LIBRARY_PATH looks for by default.
+# @description - Parses the internals of /etc/ld.so.cache and reduces the
+#     paths to those which all the cached libraries are found within.
+#
+# NOTE: This may not be the best generative solution; it might be better to
+#       parse /etc/ld.so.conf and reduce to paths that exits from that.
+#       I guess I won't find out until someone files a bug report.
+get_ld_library_paths() {
+	# In Ubuntu at least, needs GNU findutils, binutils, and coreutils. :\
+	# Every other solution uses more niche commands or takes absolutely forever
+	# to run. SORRY THIS ISN'T AS PORTABLE AS I'D LIKE IT TO BE (;n;)
+	strings /etc/ld.so.cache | xargs dirname | sort -u;
+}
+
+# @brief - Emulates a chroot executable search without sandboxing.
+# @usage - pseudochroot [-i] [-a FILE] [-t] NEWROOT PROGRAM [ARGS...]
+# @param [-i] - Instead of replacing the PATH, it's appended to.
+# @param [-a] - Launches the command asynchronusly, puts the PID in FILE
+# @param [-t] - Emulate the `type` POSIX command, don't run PROGRAM.
+# @description - Uses the environment variables:
+#     PATH, CPATH, LD_LIBRARY_PATH, LIBRARY_PATH, and PKG_CONFIG_PATH
+#   to emulate the effect of a binary being called within a chroot, without
+#   actually changing the root directory.
+# NOTE: this depends on the `setsid` utility.
+pseudochroot()
+(
+	OPTARG=''; OPTIND=0;
+	INCLUSIVE=''; ASYNC=''; EMULATE_TYPE='';
+	NEWROOT=''; PROGRAM='';
+
+	while getopts 'ia:t' option; do
+		case "$option" in
+			'i') INCLUSIVE="1";;
+			'a') ASYNC="$OPTARG";;
+			't') EMULATE_TYPE="1";;
+		esac;
+	done;
+
+	# clear getopts parsed args so we can access positional args by index.
+	shift $(($OPTIND-1));
+
+	if test -d "$1" || test -n "$INCLUSIVE"; then
+		NEWROOT="$1";
+		shift;
+	else
+		printf '%s\n' "'$1' is not a directory." >&6; return 1;
+	fi;
+
+	PROGRAM="$1"; shift;
+
+	# Since this is in a subshell, to be exclusive, just empty the variable
+	# before filling it.
+	if test -z "$INCLUSIVE"; then PATH=''; fi;
+	for p in $(. /etc/environment; IFS=":"; command echo $PATH); do
+		PATH="$PATH:$NEWROOT/$p";
+	done;
+	PATH="$PATH:$NEWROOT";
+	PATH=${PATH#:}; # Remove the unnecessary prefix in a post process.
+
+	# Don't forget to add user's binaries.
+	if test -d "$HOME/.local/bin"; then
+		PATH="$HOME/.local/bin:$PATH";
+	fi;
+
+	if test -n "$EMULATE_TYPE"; then
+		# If were' in emulate type mode, we just ensure the program exists in the
+		# result PATH.
+		PATH="$PATH" command -v "$PROGRAM" && return $?;
+	else
+		if ! PATH="$PATH" command -v "$PROGRAM" >/dev/null; then
+			error "Couldn't find command '$PROGRAM' within chroot";
+			return 1;
+		fi;
+	fi;
+
+
+	OLD_LD_P="$(get_ld_library_paths | tr '\n' ':')"; OLD_LD_P="${OLD_LD_P#.:}";
+	if test -n "$INCLUSIVE"; then LD_LIBRARY_PATH="$OLD_LD_P"; fi;
+
+	for p in $(IFS=":"; echo $OLD_LD_P); do
+		LD_LIBRARY_PATH="$NEWROOT/$p:$LD_LIBRARY_PATH";
+	done;
+
+	OLD_LD_P="${OLD_LD%:}";
+
+	# LD_LIBRARY_PATH is for Loading time. LIBRARY_PATH is for linking time.
+	# They're the same, just used at different times by different processes.
+	LIBRARY_PATH="$LD_LIBRARY_PATH";
+
+
+	# NOTE: non-generative solutions are below. These are niche variables that
+	#       may need fixing in the future, but they should be fine for now.
+
+	if test -z "$INCLUSIVE"; then CPATH=''; fi;
+	CPATH="$PSEUDOCHROOT/usr/include:$CPATH"; # modern include dir
+	CPATH="$PSEUDOCHROOT/include:$CPATH"; # legacy include dir
+	CPATH=${CPATH%:};
+
+	if test -z "$INCLUSIVE"; then PKG_CONFIG_PATH=''; fi;
+	PKG_CONFIG_PATH="$NEWROOT/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH";
+	PKG_CONFIG_PATH="$NEWROOT/usr/lib/pkgconfig:$PKG_CONFIG_PATH";
+	PKG_CONFIG_PATH="$NEWROOT/usr/share/pkgconfig:$PKG_CONFIG_PATH";
+	PKG_CONFIG_PATH=${PKG_CONFIG_PATH%:};
+
+
+	if test -z "$ASYNC"; then
+		PATH="$PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LIBRARY_PATH="$LIBRARY_PATH" \
+		CPATH="$CPATH" PKG_CONFIG_PATH="$PKG_CONFIG_PATH" \
+		command "$PROGRAM" $*;
+
+		return "$?";
+	else
+		# NOTE: In spite of previous bad advice, in POSIX shell, & does not
+		#       block pid destruction, and is better than using the setsid utility.
+		#       Nor does it do so in Bash, so IDFK what bkw777 was talking about,
+		#       but this has me a little bit peeved.
+		PATH="$PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LIBRARY_PATH="$LIBRARY_PATH" \
+		CPATH="$CPATH" PKG_CONFIG_PATH="$PKG_CONFIG_PATH" \
+		command "$PROGRAM" $* & PID="$!";
+
+		echo "$PID" > "$ASYNC";
+		return 0;
+	fi;
+)

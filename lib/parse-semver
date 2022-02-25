@@ -1,0 +1,62 @@
+# @describe - Parses a Semantic Version into it's various segments.
+# @arg $1 - Should be a valid Semantic Version, optionally preceded by the
+#           letter 'v'.
+# @exit 0 - When input was a SemVer and has been parsed.
+# @exit 1 - If input string is not a valid Semantic Version @SemVer 2.0.0
+parse_semver(){
+	s="$1"; l=0; major='0'; minor='0'; patch='0'; prerelease=''; buildmetadata='';
+
+	# Check for build metadata or prerelease
+	f="${s%%[\-+]*}"; b="${s#*[\-+]}";
+	if test -z "$f"; then
+		echo "\"$1\" is not a Semantic Version." >&2; return 1;
+	fi;
+	OIFS="$IFS"; IFS=".";
+	for ns in $f; do
+		# Can't have empty fields, zero prefixes or contain non-numbers.
+		if test -z "$ns" -o "$ns" != "${ns#0[0-9]}" -o "$ns" != "${ns#*[!0-9]}"; then
+			echo "\"$1\" is not a Semantic Version." >&2; return 1;
+		fi;
+
+		case "$l" in
+			'0') major="$ns";; '1') minor="$ns";; '2') patch="$ns";;
+			*) echo "\"$1\" is not a Semantic Version." >&2; return 1;;
+		esac;
+		l=$(( l + 1 ));
+	done;
+	IFS="$OIFS";
+
+	# Determine what character was used, metadata or prerelease.
+	if test "$f-$b" = "$s"; then
+		# if it was for the prerelease, check for the final build metadata.
+		s="$b"; f="${s%%+*}"; b="${s#*+}";
+
+		prerelease="$f";
+		if test "$f" != "$b"; then buildmetadata="$b"; fi;
+
+	elif test "$f+$b" = "$s"; then
+		# If metadata, we're done processing.
+		buildmetadata="$b";
+	fi;
+
+	OIFS="$IFS"; IFS=".";
+	# prereleases and build metadata can have any number of letter fields,
+	# alphanum, and numeric fields separated by dots.
+	# Also protect buildmetadata and prerelease from special chars.
+	for s in $prerelease; do
+		case "$s" in
+			# Leading zeros is bad juju
+			''|0*[!1-9a-zA-Z-]*|*[!0-9a-zA-Z-]*)
+				echo "\"$1\" is not a Semantic Version." >&2;
+			IFS="$OIFS"; return 1;;
+		esac;
+	done;
+	for s in $buildmetadata; do
+		case "$s" in
+			''|*[!0-9a-zA-Z-]*)
+				echo "\"$1\" is not a Semantic Version." >&2;
+			IFS="$OIFS"; return 1;;
+		esac;
+	done;
+	IFS="$OIFS";
+}

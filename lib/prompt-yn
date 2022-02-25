@@ -1,0 +1,31 @@
+# @describe - Ask user for a yes or no; when $NOPROMPT is set, will use default.
+#   Additionally, default option will be uppercase at prompt ie. recommended.
+# @arg $1 - Default response one of 0/y/Y for Yes or 1/n/N for No.
+#   Leaving this entry blank will force a prompt.
+# @arg $2 - Custom prompt; Will appear before "[Yn]:"
+prompt_yn() {
+	case "$1" in
+		[0yY]) default="Yn";;
+		[1nN]) default="Ny";;
+		*)
+			echo "Error: Prompt recieved invalid default argument." >&2;
+			exit 2;;; # Apparently my editor hates case breaks
+	done;
+
+	if test -z "$NOPROMPT" && test -n "$default"; then
+		answer="$1";
+	else
+		test -n "$default" || default="yn";
+		while read -p "$2 [$default]:" answer; do
+			case "$answer" in
+				[yY]*|[nN]*) answer="$default"; break;;
+				*) echo "Invalid response, please answer Yes or No.";;;
+			esac;
+		done;
+	fi;
+
+	case "$answer" in
+		[yY]*) return 0;;
+		[nN]*) return 1;;
+	esac;
+}

@@ -1,0 +1,34 @@
+# @describe - Ensures any characters that are embedded inside quotes can
+#             be eval-ed without worry of parameter injection.
+# @usage [-p COUNT] doublequote STRING('s)...
+# @param STRING('s) - The string or strings you wish to sanitize.
+# @param COUNT - The number of passes to run sanitization, default is 1.
+doublequote()
+(
+	DONE=''; PASSES=1; l=0; f=''; c=''; # TODO='';
+
+	if test "$1" = '-p'; then PASSES="$2"; shift 2; fi;
+
+	TODO="$*"; # must be set after the conditional shift.
+
+	OIFS="$IFS";
+	while test "$l" -lt "$PASSES"; do
+		# Ensure we cycle TODO after the first pass.
+		if test "$l" -gt 0; then TODO="$DONE"; DONE=; fi;
+
+		# Use IFS to split by filter chars.
+		IFS='"\$'; for f in $TODO; do
+			# Since $f cannot contain unsafe chars, we can test against it.
+			c=;
+			if test "${TODO#${DONE}${f}\"}" != "$TODO"; then c='\"'; fi;
+			if test "${TODO#${DONE}${f}\\}" != "$TODO"; then c='\\'; fi;
+			if test "${TODO#${DONE}${f}\$}" != "$TODO"; then c='\$'; fi;
+			if test "${TODO#${DONE}${f}\`}" != "$TODO"; then c='\`'; fi;
+			DONE="$DONE$f$c";
+		done;
+		l="$((l + 1))"; # Increment loop counter.
+	done;
+	IFS="$OIFS";
+
+	printf '%s' "$DONE";
+)
